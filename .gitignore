@@ -1,0 +1,25 @@
+# Local SDK checkouts (fetched by ./android_sdk.sh, or by CI on every run)
+/android/sdk/
+
+# CI signing key (generated per build, or restored from secrets)
+/android/ci-release.jks
+
+# Gradle / build outputs
+.gradle/
+build/
+android/.gradle/
+android/build/
+android/app/build/
+android/app/.cxx/
+
+# Local keystores & packages
+*.jks
+*.keystore
+*.apk
+*.aab
+
+# ccache
+.ccache/
+
+# OS junk
+.DS_Store

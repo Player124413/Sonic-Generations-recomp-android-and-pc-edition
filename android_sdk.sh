@@ -3,9 +3,10 @@
 # patches were written against), init submodules, apply the Android patch set
 # from hells-gate-recomp-android (deivid22srk), stage SDL3's Java glue.
 #
-#   tools/android_sdk.sh [dest=android/sdk/rexglue-sdk]
+#   ./android_sdk.sh [dest=android/sdk/rexglue-sdk]
 set -euo pipefail
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# This script lives in the repo root (next to the android/ dir).
+ROOT="$(cd "$(dirname "$0")" && pwd)"
 SDK_DIR="${1:-$ROOT/android/sdk/rexglue-sdk}"
 SDK_REPO="https://github.com/rexglue/rexglue-sdk.git"
 SDK_TAG="v0.10.0"

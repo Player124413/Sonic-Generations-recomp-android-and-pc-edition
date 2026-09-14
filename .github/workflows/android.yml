@@ -1,0 +1,135 @@
+name: Android APK (Sonic Generations)
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write # needed to publish GitHub Releases on tags
+
+env:
+  REX_NAME: sonicgenerations
+  REX_TITLE: Sonic Generations
+  REX_TITLE_ID: 53450848
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360 # the native tree is huge; first build takes 1-2h
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install SDK packages (platform 35, NDK, CMake)
+        run: |
+          yes | sdkmanager --licenses > /dev/null 2>&1 || true
+          sdkmanager --install \
+            "platforms;android-35" \
+            "build-tools;35.0.0" \
+            "ndk;27.2.12479018" \
+            "cmake;3.31.1"
+
+      - name: Install ccache
+        run: sudo apt-get update && sudo apt-get install -y ccache
+
+      - name: Restore ccache
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.cache/ccache
+          key: ccache-${{ runner.os }}-ndk27-${{ github.ref_name }}-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ runner.os }}-ndk27-${{ github.ref_name }}-
+            ccache-${{ runner.os }}-ndk27-
+
+      - name: Configure ccache
+        run: |
+          ccache --set-config=cache_dir="$HOME/.cache/ccache"
+          ccache --max-size=5G
+          ccache --zero-stats
+          echo "REX_CCACHE=$(command -v ccache)" >> "$GITHUB_ENV"
+
+      - name: Fetch ReXGlue SDK + patches
+        run: bash android_sdk.sh "$GITHUB_WORKSPACE/android/sdk/rexglue-sdk"
+
+      - name: Signing key
+        run: |
+          if [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
+            echo "[sign] using keystore from secrets.ANDROID_KEYSTORE_BASE64"
+            echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/ci-release.jks
+          else
+            echo "[sign] no secret keystore, generating an ephemeral CI key"
+            keytool -genkeypair \
+              -keystore android/ci-release.jks -alias rexauto \
+              -keyalg RSA -keysize 2048 -validity 10950 -storetype JKS \
+              -storepass rexauto -keypass rexauto \
+              -dname "CN=Rexauto, OU=CI, O=Rexauto, L=CI, ST=CI, C=US"
+          fi
+
+      - name: Build release APK
+        working-directory: android
+        run: |
+          ./gradlew assembleRelease --stacktrace \
+            "-PrexName=$REX_NAME" \
+            "-PrexTitle=$REX_TITLE" \
+            "-PrexTitleId=$REX_TITLE_ID" \
+            "-PrexPortDir=$GITHUB_WORKSPACE/port" \
+            "-PrexSdkDir=$GITHUB_WORKSPACE/android/sdk/rexglue-sdk" \
+            "-PrexVersionCode=$GITHUB_RUN_NUMBER" \
+            "-PrexVersionName=1.0.$GITHUB_RUN_NUMBER"
+
+      - name: ccache stats
+        if: always()
+        run: ccache --show-stats || true
+
+      - name: Save ccache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.cache/ccache
+          key: ccache-${{ runner.os }}-ndk27-${{ github.ref_name }}-${{ github.sha }}
+
+      - name: Collect APK
+        run: |
+          APK="android/app/build/outputs/apk/release/app-release.apk"
+          ls -la "$APK"
+          OUT="SonicGenerations-android-1.0.${GITHUB_RUN_NUMBER}.apk"
+          cp "$APK" "$OUT"
+          sha256sum "$OUT" | tee "$OUT.sha256"
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SonicGenerations-android
+          path: |
+            SonicGenerations-android-*.apk
+            SonicGenerations-android-*.apk.sha256
+          retention-days: 30
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            SonicGenerations-android-*.apk
+            SonicGenerations-android-*.apk.sha256
+          generate_release_notes: true
+
+      - name: Disk usage (on failure)
+        if: failure()
+        run: |
+          df -h
+          du -sh "$GITHUB_WORKSPACE/android/sdk"/* 2>/dev/null || true
+          du -sh android/app/.cxx 2>/dev/null || true

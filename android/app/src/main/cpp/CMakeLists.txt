@@ -47,7 +47,9 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
   if(NOT DEFINED ENV{REX_ANDROID_BASELINE_ARM})
     add_compile_options(-march=armv8.2-a+fp16+dotprod -mtune=cortex-a76)
   endif()
-  add_link_options(-Wl,-O2 -Wl,--gc-sections -Wl,--icf=all -Wl,--as-needed -Wl,-z,now)
+  # -z,max-page-size=16384: 16KB-page devices (Android 15+ requirement)
+  # still run the .so on 4KB devices too.
+  add_link_options(-Wl,-O2 -Wl,--gc-sections -Wl,--icf=all -Wl,--as-needed -Wl,-z,now -Wl,-z,max-page-size=16384)
 endif()
 
 add_subdirectory("${REXSDK_DIR}" rexglue-sdk)

@@ -77,9 +77,11 @@ public final class PadInputBridge {
         }
     }
 
-    private static native void nativeSetButton(int button, boolean down);
+    // NOTE: boolean (not void) -- the native implementations in
+    // android_gamepad.cpp return jboolean; the declared return type must match.
+    private static native boolean nativeSetButton(int button, boolean down);
 
-    private static native void nativeSetStick(int stick, float x, float y);
+    private static native boolean nativeSetStick(int stick, float x, float y);
 
-    private static native void nativeSetTrigger(int trigger, float value);
+    private static native boolean nativeSetTrigger(int trigger, float value);
 }

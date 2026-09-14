@@ -44,6 +44,15 @@ android {
                     "-DREX_PORT_DIR=$rexPortDir",
                     "-DREX_APP_NAME=$rexName",
                 )
+                // Optional ccache (CI exports REX_CCACHE=/usr/bin/ccache):
+                // the native tree is enormous, this makes rebuilds ~10x faster.
+                val ccache = System.getenv("REX_CCACHE")
+                if (!ccache.isNullOrEmpty()) {
+                    arguments += listOf(
+                        "-DCMAKE_C_COMPILER_LAUNCHER=$ccache",
+                        "-DCMAKE_CXX_COMPILER_LAUNCHER=$ccache",
+                    )
+                }
                 cppFlags += listOf("-std=c++23")
             }
         }
