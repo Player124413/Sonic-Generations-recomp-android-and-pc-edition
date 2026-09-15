@@ -24,6 +24,7 @@
 #include <ucontext.h>
 #include <unistd.h>
 #include <unwind.h>
+#include <sys/prctl.h>
 #include <sys/resource.h>
 #include <jni.h>
 
@@ -299,6 +300,10 @@ int RunAndroidApp() {
   // Foreground apps may lower their own nice value down to -10 without any
   // permission; the guest threads inherit it. Ignored (EACCES) if refused.
   setpriority(PRIO_PROCESS, 0, -10);
+  // Default 50 ms timer slack makes sleep()-based pacing (vblank worker,
+  // message loop) wake up late; drop it for the main thread (runtime threads
+  // get the same treatment from the SDK timerslack patch).
+  prctl(PR_SET_TIMERSLACK, 1UL, 0, 0, 0);
   const std::string lib_dir = QueryNativeLibraryDir();
   JavaVM* java_vm = QueryJavaVm();
   if (lib_dir.empty()) ALOGE("nativeLibraryDir unresolved - GPU plugin loading will fail");
@@ -409,6 +414,24 @@ int RunAndroidApp() {
 }
 
 }  // namespace
+
+// FPS meter for the launcher overlay (MainActivity.nativeGetPresentCount).
+// The counter lives in librexruntime.so -- the presenter instance used by the
+// game. libmain.so carries its own unused copy of the UI objects, so a direct
+// call could bind locally (always reading 0); resolve the runtime's copy by
+// name instead. Returns -1 when the counter is unavailable.
+extern "C" JNIEXPORT jlong JNICALL
+Java_com_rexauto_port_MainActivity_nativeGetPresentCount(JNIEnv* /*env*/, jclass /*clazz*/) {
+  using GetCountFn = uint64_t (*)();
+  static GetCountFn fn = []() -> GetCountFn {
+    void* handle = dlopen("librexruntime.so", RTLD_NOW | RTLD_NOLOAD);
+    if (!handle) handle = dlopen("librexruntime.so", RTLD_NOW);
+    if (!handle) return nullptr;
+    return reinterpret_cast<GetCountFn>(dlsym(handle, "RexAndroid_GetPresentCount"));
+  }();
+  if (!fn) return -1;
+  return static_cast<jlong>(fn());
+}
 
 int main(int argc, char* argv[]) {
   (void)argc;

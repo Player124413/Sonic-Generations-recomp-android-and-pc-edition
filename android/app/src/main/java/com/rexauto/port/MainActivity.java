@@ -13,6 +13,12 @@ import org.libsdl.app.SDLActivity;
 /** SDL3 activity hosting the recompiled game (SDL is linked statically into libmain.so). */
 public class MainActivity extends SDLActivity {
     private VirtualPadView mGamepad;
+    private android.widget.TextView mFpsView;
+    private android.os.Handler mFpsHandler;
+    private long mLastPresents = -1;
+
+    /** Present counter from the Vulkan presenter (librexruntime.so); -1 if unavailable. */
+    private static native long nativeGetPresentCount();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -36,7 +42,65 @@ public class MainActivity extends SDLActivity {
         if (PadSettings.get(this).enabled()) {
             mGamepad = VirtualPadView.install(this);
         }
+        if (new GraphicsSettings(this).showFps()) {
+            installFpsMeter();
+        }
     }
+
+    /** Tiny FPS readout in the corner, fed by the native present counter. */
+    private void installFpsMeter() {
+        android.view.ViewGroup layout;
+        try {
+            layout = (android.view.ViewGroup) org.libsdl.app.SDLActivity.getContentView();
+        } catch (Throwable t) {
+            return;
+        }
+        if (layout == null) return;
+        final MainActivity self = this;
+        runOnUiThread(() -> {
+            android.widget.TextView v = new android.widget.TextView(self);
+            v.setText("FPS: --");
+            v.setTextSize(13);
+            v.setTypeface(android.graphics.Typeface.MONOSPACE);
+            v.setTextColor(0xFF00FF88);
+            v.setBackgroundColor(0x99000000);
+            v.setPadding(14, 6, 14, 6);
+            // Plain ViewGroup params (like the virtual gamepad): whatever layout
+            // SDL uses, an unsized child lands in the top-left corner.
+            android.view.ViewGroup.LayoutParams lp = new android.view.ViewGroup.LayoutParams(
+                    android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
+                    android.view.ViewGroup.LayoutParams.WRAP_CONTENT);
+            try {
+                layout.addView(v, lp);
+            } catch (Throwable t) {
+                return;
+            }
+            mFpsView = v;
+            mFpsHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+            mFpsHandler.post(mFpsTick);
+        });
+    }
+
+    private final Runnable mFpsTick = new Runnable() {
+        @Override
+        public void run() {
+            if (mFpsView != null) {
+                long n;
+                try {
+                    n = nativeGetPresentCount();
+                } catch (Throwable t) {
+                    n = -1;
+                }
+                if (n >= 0 && mLastPresents >= 0) {
+                    mFpsView.setText("FPS: " + (n - mLastPresents));
+                } else if (n < 0) {
+                    mFpsView.setText("FPS: --");
+                }
+                if (n >= 0) mLastPresents = n;
+                if (mFpsHandler != null) mFpsHandler.postDelayed(this, 1000);
+            }
+        }
+    };
 
     /** Orientation chosen in the launcher (Graphics dialog); landscape by default. */
     private void applyOrientation() {
@@ -53,7 +117,17 @@ public class MainActivity extends SDLActivity {
     @Override
     protected void onPause() {
         if (mGamepad != null) mGamepad.onHostPause();
+        if (mFpsHandler != null) mFpsHandler.removeCallbacks(mFpsTick);
         super.onPause();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (mFpsHandler != null && mFpsView != null) {
+            mLastPresents = -1;
+            mFpsHandler.post(mFpsTick);
+        }
     }
 
     @Override

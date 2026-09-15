@@ -629,6 +629,16 @@ public class SetupActivity extends Activity {
         tolerant.setChecked(gs.tolerant());
         box.addView(tolerant);
 
+        CheckBox fpsMeter = new CheckBox(this);
+        fpsMeter.setText(R.string.gfx_fps_meter);
+        fpsMeter.setChecked(gs.showFps());
+        box.addView(fpsMeter);
+
+        CheckBox speedHacks = new CheckBox(this);
+        speedHacks.setText(R.string.gfx_speed_hacks);
+        speedHacks.setChecked(gs.speedHacks());
+        box.addView(speedHacks);
+
         label(box, R.string.gfx_extra);
         EditText extra = new EditText(this);
         extra.setHint("key=value");
@@ -652,6 +662,8 @@ public class SetupActivity extends Activity {
                     gs.setVsync(vsync.isChecked());
                     gs.setLetterbox(letterbox.isChecked());
                     gs.setTolerant(tolerant.isChecked());
+                    gs.setShowFps(fpsMeter.isChecked());
+                    gs.setSpeedHacks(speedHacks.isChecked());
                     gs.setExtra(extra.getText().toString());
                     try { gs.write(this); } catch (Exception e) { Toast.makeText(this, e.toString(), Toast.LENGTH_LONG).show(); }
                 })

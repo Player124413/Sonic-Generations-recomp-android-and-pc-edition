@@ -1,0 +1,34 @@
+diff --git a/src/ui/vulkan/vulkan_presenter.cpp b/src/ui/vulkan/vulkan_presenter.cpp
+--- a/src/ui/vulkan/vulkan_presenter.cpp
++++ b/src/ui/vulkan/vulkan_presenter.cpp
+@@ -58,6 +58,17 @@ REXCVAR_DEFINE_BOOL(vulkan_allow_present_mode_fifo_relaxed, true, "UI/Vulkan",
+ REXCVAR_DEFINE_BOOL(vulkan_allow_present_mode_fifo_relaxed, true, "UI/Vulkan",
+                     "Allow FIFO relaxed present mode");
+
++#if REX_PLATFORM_ANDROID
++// Present counter for the Android launcher FPS meter: incremented on every
++// successful vkQueuePresentKHR and read from Java over JNI (dlsym'd out of
++// librexruntime.so, where the presenter instance used by the game lives).
++// With vblank-capped titles this equals the emulated frame rate.
++static std::atomic<uint64_t> g_android_present_count{0};
++extern "C" __attribute__((visibility("default"))) uint64_t RexAndroid_GetPresentCount() {
++  return g_android_present_count.load(std::memory_order_relaxed);
++}
++#endif
++
+ namespace rex {
+ namespace ui {
+ namespace vulkan {
+@@ -2244,6 +2257,12 @@ Presenter::PaintResult VulkanPresenter::PaintAndPresentImpl(bool execute_ui_draw
+   }
+   switch (present_result) {
+     case VK_SUCCESS:
++#if REX_PLATFORM_ANDROID
++      g_android_present_count.fetch_add(1, std::memory_order_relaxed);
++#endif
+       return PaintResult::kPresented;
+     case VK_SUBOPTIMAL_KHR:
++#if REX_PLATFORM_ANDROID
++      g_android_present_count.fetch_add(1, std::memory_order_relaxed);
++#endif
+       return PaintResult::kPresentedSuboptimal;

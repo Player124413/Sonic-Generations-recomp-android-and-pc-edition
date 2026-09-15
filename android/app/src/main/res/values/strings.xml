@@ -34,6 +34,8 @@
     <string name="gfx_vsync">V-Sync (smoother, caps FPS)</string>
     <string name="gfx_letterbox">Keep aspect ratio (letterbox)</string>
     <string name="gfx_tolerant">Tolerant mode (skip missing functions instead of crashing)</string>
+    <string name="gfx_fps_meter">Show FPS counter while playing</string>
+    <string name="gfx_speed_hacks">Extra speed hack (risky, may crash — needs game restart)</string>
     <string name="gfx_extra">Advanced: extra runtime options (key=value per line)</string>
 
     <!-- Virtual gamepad (from hells-gate-recomp-android) -->

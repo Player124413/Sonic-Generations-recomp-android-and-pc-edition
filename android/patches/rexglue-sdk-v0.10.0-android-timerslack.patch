@@ -1,0 +1,28 @@
+diff --git a/src/core/threading_posix.cpp b/src/core/threading_posix.cpp
+--- a/src/core/threading_posix.cpp
++++ b/src/core/threading_posix.cpp
+@@ -24,6 +24,9 @@
+ #include <pthread.h>
+ #include <semaphore.h>
+
++#if REX_PLATFORM_ANDROID
++#include <sys/prctl.h>
++#endif
+ #if defined(__APPLE__)
+ #include <cstdio>
+
+@@ -1413,6 +1416,14 @@ void* PosixCondition<Thread>::ThreadStartRoutine(void* parameter) {
+   }
+ #endif
+   set_current_thread_name("");
++#if REX_PLATFORM_ANDROID
++  // Android gives every thread a 50 ms timer slack: nanosleep() wakeups (the
++  // GPU vblank worker sleeps 1 ms per iteration) can arrive tens of
++  // milliseconds late, which shows up as frame-pacing jitter. Drop the slack
++  // on every runtime thread (guest, GPU, audio); negligible power cost while
++  // the game is actively rendering.
++  prctl(PR_SET_TIMERSLACK, 1UL, 0, 0, 0);
++#endif
+
+   auto start_data = static_cast<ThreadStartData*>(parameter);
+   assert_not_null(start_data);

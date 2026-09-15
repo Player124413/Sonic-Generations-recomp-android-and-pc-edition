@@ -69,9 +69,26 @@ public final class GraphicsSettings {
     public String preset() { return prefs.getString("preset", "performance"); }
     public void setPreset(String v) { prefs.edit().putString("preset", v).apply(); }
 
-    /** Frame-rate cap 0 = off. 30 halves GPU work for games that already ran at 30 on the 360. */
-    public int fpsCap() { return prefs.getInt("fps_cap", 0); }
+    /**
+     * Frame-rate cap, 0 = off. Generations is a native 30 FPS title on the
+     * 360, so 30 is the default: uncapped, a 60/120 Hz phone burns CPU+GPU on
+     * frames the game was never tuned for (and risks 2x-speed physics).
+     */
+    public int fpsCap() { return prefs.getInt("fps_cap", 30); }
     public void setFpsCap(int v) { prefs.edit().putInt("fps_cap", v).apply(); }
+
+    /** FPS counter overlay while playing (fed by the native present count). */
+    public boolean showFps() { return prefs.getBoolean("show_fps", true); }
+    public void setShowFps(boolean v) { prefs.edit().putBoolean("show_fps", v).apply(); }
+
+    /**
+     * Unsafe speed hack: protect_zero=false. Skips the extra memory
+     * protection around guest address 0 -- measurably faster, but titles that
+     * (mis)use address 0 will crash. Off by default; try it if you need a few
+     * more frames and the game stays stable.
+     */
+    public boolean speedHacks() { return prefs.getBoolean("speed_hacks", false); }
+    public void setSpeedHacks(boolean v) { prefs.edit().putBoolean("speed_hacks", v).apply(); }
 
     /** Extra raw cvars (advanced): "key=value" per line. */
     public String extra() { return prefs.getString("extra", ""); }
@@ -109,8 +126,11 @@ public final class GraphicsSettings {
             m.put("vulkan_allow_present_mode_immediate", "false");
             m.put("vulkan_allow_present_mode_mailbox", "false");
             m.put("vulkan_allow_present_mode_fifo_relaxed", "true");
-            // log I/O on the render/guest threads is not free
+            // log I/O on the render/guest threads is not free; also cap the
+            // on-device log pile (5 MB x 20 files by default)
             m.put("log_level", "warning");
+            m.put("log_max_file_size_mb", "2");
+            m.put("log_max_files", "3");
             m.put("log_high_frequency_kernel_calls", "false");
             m.put("vulkan_log_debug_messages", "false");
             m.put("gpu_debug_markers", "false");
@@ -125,6 +145,7 @@ public final class GraphicsSettings {
         } else if (p.equals("balanced")) {
             m.put("anisotropic_override", "3");          // 4x
         }
+        if (speedHacks()) m.put("protect_zero", "false");
         if (fpsCap() > 0) m.put("env.REX_FPS_CAP", Integer.toString(fpsCap()));
         // "env.NAME=value" lines are exported as environment variables by the
         // native side (the dispatcher reads REX_HEAL_DISCOVER via getenv).

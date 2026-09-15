@@ -41,7 +41,7 @@ set(REXGLUE_USE_D3D12 OFF CACHE BOOL "" FORCE)
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
   set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
   set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
-  add_compile_options(-O3 -DNDEBUG -fomit-frame-pointer -fno-plt
+  add_compile_options(-O3 -DNDEBUG -g0 -fomit-frame-pointer -fno-plt
                       -fno-semantic-interposition -fmerge-all-constants
                       -fno-stack-protector -fno-unwind-tables -fno-asynchronous-unwind-tables)
   if(NOT DEFINED ENV{REX_ANDROID_BASELINE_ARM})
