@@ -569,9 +569,9 @@ public class SetupActivity extends Activity {
 
         label(box, R.string.gfx_preset);
         Spinner preset = new Spinner(this);
-        String[] presets = {"performance", "balanced", "accuracy"};
+        String[] presets = {"performance", "balanced", "accuracy", "ultra"};
         preset.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item,
-                new String[]{getString(R.string.preset_performance), getString(R.string.preset_balanced), getString(R.string.preset_accuracy)}));
+                new String[]{getString(R.string.preset_performance), getString(R.string.preset_balanced), getString(R.string.preset_accuracy), getString(R.string.preset_ultra)}));
         for (int i = 0; i < presets.length; i++) if (presets[i].equals(gs.preset())) preset.setSelection(i);
         box.addView(preset);
 

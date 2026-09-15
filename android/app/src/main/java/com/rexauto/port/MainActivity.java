@@ -124,7 +124,9 @@ public class MainActivity extends SDLActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        if (mFpsHandler != null && mFpsView != null) {
+        if (mFpsView == null && new GraphicsSettings(this).showFps()) {
+            installFpsMeter();  // late retry if the SDL layout wasn't ready in onCreate
+        } else if (mFpsHandler != null) {
             mLastPresents = -1;
             mFpsHandler.post(mFpsTick);
         }

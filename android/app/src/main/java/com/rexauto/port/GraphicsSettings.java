@@ -65,6 +65,11 @@ public final class GraphicsSettings {
      *   balanced     -- like performance but 4x anisotropic and real occlusion
      *                   queries (some games use them for lens flares / LOD).
      *   accuracy     -- SDK defaults (what the desktop port runs).
+     *   ultra        -- everything in performance, plus experimental speed
+     *                   gambles: batched Vulkan submits (fewer driver syscalls
+     *                   per frame), error-only logging, forced protect_zero
+     *                   hack. Try it when performance is not enough; if a game
+     *                   misbehaves, fall back to performance.
      */
     public String preset() { return prefs.getString("preset", "performance"); }
     public void setPreset(String v) { prefs.edit().putString("preset", v).apply(); }
@@ -137,13 +142,22 @@ public final class GraphicsSettings {
             // dynamic rendering: no VkRenderPass objects, fewer pipeline variants
             m.put("vulkan_dynamic_rendering", "true");
         }
-        if (p.equals("performance")) {
+        if (p.equals("performance") || p.equals("ultra")) {
             m.put("anisotropic_override", "0");          // 0 = off
             m.put("occlusion_query_enable", "false");    // constant answer, no GPU round-trip
             m.put("native_2x_msaa", "false");            // resolve 2xMSAA as 1x
             m.put("gamma_render_target_as_unorm16", "false"); // 8-bit gamma RTs: half the bandwidth
         } else if (p.equals("balanced")) {
             m.put("anisotropic_override", "3");          // 4x
+        }
+        if (p.equals("ultra")) {
+            // Experimental speed gambles (see preset() docs). Submit batching
+            // trades a little CPU/GPU overlap for fewer vkQueueSubmit
+            // syscalls; error-only logging kills any per-frame warning spam
+            // from the hot path; protect_zero is forced off.
+            m.put("vulkan_submit_on_primary_buffer_end", "false");
+            m.put("log_level", "error");
+            m.put("protect_zero", "false");
         }
         if (speedHacks()) m.put("protect_zero", "false");
         if (fpsCap() > 0) m.put("env.REX_FPS_CAP", Integer.toString(fpsCap()));
