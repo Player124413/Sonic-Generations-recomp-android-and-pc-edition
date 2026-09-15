@@ -45,6 +45,7 @@ jobs:
           $env:Path = "C:\Program Files\LLVM\bin;$env:Path"
           Get-Command clang-cl -ErrorAction Stop | Out-Null
           & clang-cl --version | Select-Object -First 2
+          & clang-cl --version | Select-Object -First 1 | ForEach-Object { Write-Output "::notice::clang-cl: $_" }
           if (-not (Get-Command ninja -ErrorAction SilentlyContinue)) {
             choco install ninja -y --no-progress
           }
@@ -72,7 +73,26 @@ jobs:
           -DCMAKE_BUILD_TYPE=Release
 
       - name: Build
-        run: cmake --build build --parallel
+        run: |
+          cmake --build build --parallel 2>&1 | Tee-Object -FilePath build/build.log
+          if ($LASTEXITCODE -ne 0) {
+            Write-Output "::group::first errors"
+            Get-Content build/build.log | Select-String -Pattern "FAILED|: error|subcommand failed" | Select-Object -First 25 | ForEach-Object {
+              $line = $_.Line.Trim()
+              if ($line.Length -gt 1000) { $line = $line.Substring(0, 1000) }
+              Write-Output "::error::$line"
+            }
+            Write-Output "::endgroup::"
+            exit 1
+          }
+
+      - name: Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-build-log
+          path: build/build.log
+          retention-days: 7
 
       - name: Package
         run: |
