@@ -1,0 +1,19 @@
+diff --git a/src/ui/vulkan/vulkan_device.cpp b/src/ui/vulkan/vulkan_device.cpp
+--- a/src/ui/vulkan/vulkan_device.cpp
++++ b/src/ui/vulkan/vulkan_device.cpp
+@@ -70,6 +70,15 @@ std::unique_ptr<VulkanDevice> VulkanDevice::CreateIfSupported(
+   // Get supported Vulkan 1.0 properties and features.
+
+   VkPhysicalDeviceProperties properties = {};
+   ifn.vkGetPhysicalDeviceProperties(physical_device, &properties);
++#if REX_PLATFORM_ANDROID
++  // One-line GPU fingerprint for Android logs: the launcher shares the log
++  // file, so this tells exactly which GPU/driver a report came from
++  // (e.g. Turnip vs the stock Adreno blob, Mali vs Adreno).
++  REXLOG_INFO("Android GPU: {} (Vulkan {}.{}.{}, driver version 0x{:X})", properties.deviceName,
++              VK_API_VERSION_MAJOR(properties.apiVersion),
++              VK_API_VERSION_MINOR(properties.apiVersion),
++              VK_API_VERSION_PATCH(properties.apiVersion), properties.driverVersion);
++#endif
+
+   const uint32_t unclamped_api_version = properties.apiVersion;

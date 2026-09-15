@@ -1,0 +1,20 @@
+diff --git a/src/system/function_dispatcher.cpp b/src/system/function_dispatcher.cpp
+--- a/src/system/function_dispatcher.cpp
++++ b/src/system/function_dispatcher.cpp
+@@ -49,10 +49,16 @@ static void InvalidFunctionTrap(PPCContext& ctx, uint8_t* /*base*/) {
+   if (tolerant) {
+     static std::mutex mtx;
+     static std::unordered_set<uint32_t> seen;
++    // Fast lane: a miss for the same target twice in a row (a vtable slot hit
++    // every frame) skips the global mutex + hash lookup. Behavior is
++    // unchanged: every distinct target is still logged exactly once.
++    thread_local uint32_t tl_seen_target = 0xFFFFFFFFu;
++    if (tl_seen_target == target) return;
+     std::lock_guard<std::mutex> lk(mtx);
+     if (seen.insert(target).second) {
+       REXLOG_WARN("Call to invalid or unregistered function at guest address 0x{:08X} (returning)",
+                   target);
+     }
++    tl_seen_target = target;
+     return;
+   }

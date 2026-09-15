@@ -19,16 +19,24 @@ diff --git a/src/ui/vulkan/vulkan_presenter.cpp b/src/ui/vulkan/vulkan_presenter
  namespace rex {
  namespace ui {
  namespace vulkan {
-@@ -2244,6 +2257,12 @@ Presenter::PaintResult VulkanPresenter::PaintAndPresentImpl(bool execute_ui_draw
+@@ -2244,6 +2257,20 @@ Presenter::PaintResult VulkanPresenter::PaintAndPresentImpl(bool execute_ui_draw
    }
    switch (present_result) {
      case VK_SUCCESS:
 +#if REX_PLATFORM_ANDROID
 +      g_android_present_count.fetch_add(1, std::memory_order_relaxed);
++      if ((g_android_present_count.load(std::memory_order_relaxed) % 300) == 0) {
++        REXLOG_INFO("Android FPS meter: {} presents total",
++                    g_android_present_count.load(std::memory_order_relaxed));
++      }
 +#endif
        return PaintResult::kPresented;
      case VK_SUBOPTIMAL_KHR:
 +#if REX_PLATFORM_ANDROID
 +      g_android_present_count.fetch_add(1, std::memory_order_relaxed);
++      if ((g_android_present_count.load(std::memory_order_relaxed) % 300) == 0) {
++        REXLOG_INFO("Android FPS meter: {} presents total",
++                    g_android_present_count.load(std::memory_order_relaxed));
++      }
 +#endif
        return PaintResult::kPresentedSuboptimal;
