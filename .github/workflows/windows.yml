@@ -51,11 +51,19 @@ jobs:
           ninja --version
           cmake --version | Select-Object -First 1
 
-      - name: Fetch ReXGlue SDK + patches
+      # SDK fetch is split into phases so a failure points at the phase
+      # (the script also reports the failing command via ::error::).
+      - name: Clone ReXGlue SDK
         shell: bash
-        # Default dest is windows/sdk under the repo root; the script is a
-        # no-op on re-runs (used as a cache-friendly stamp by CI).
-        run: bash windows_sdk.sh
+        run: bash windows_sdk.sh windows/sdk/rexglue-sdk clone
+
+      - name: Init SDK submodules
+        shell: bash
+        run: bash windows_sdk.sh windows/sdk/rexglue-sdk submodules
+
+      - name: Apply SDK patches
+        shell: bash
+        run: bash windows_sdk.sh windows/sdk/rexglue-sdk patches
 
       - name: Configure (ClangCL + Ninja)
         run: >
