@@ -1,0 +1,6 @@
+# Shell scripts and patches must keep LF endings even on Windows checkouts:
+# CRLF breaks bash parsing (`$'\r': command not found`, stray '\r' in branch
+# names) and `git apply` context matching. Everything else follows the
+# platform default (CMake/YAML/TOML/.bat all tolerate CRLF).
+*.sh text eol=lf
+*.patch text eol=lf
