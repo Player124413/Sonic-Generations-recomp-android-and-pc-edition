@@ -76,12 +76,19 @@ jobs:
         run: |
           cmake --build build --parallel 2>&1 | Tee-Object -FilePath build/build.log
           if ($LASTEXITCODE -ne 0) {
-            Write-Output "::group::first errors"
-            Get-Content build/build.log | Select-String -Pattern "FAILED|: error|subcommand failed" | Select-Object -First 25 | ForEach-Object {
-              $line = $_.Line.Trim()
-              if ($line.Length -gt 1000) { $line = $line.Substring(0, 1000) }
-              Write-Output "::error::$line"
+            $log = Get-Content build/build.log
+            function Out-Ann($level, $text) {
+              $t = $text.Trim()
+              if ($t.Length -gt 900) { $t = $t.Substring(0, 900) }
+              Write-Output "::$level::$t"
             }
+            Write-Output "::group::failures"
+            # 1) failing outputs first (names the TU/target).
+            $log | Select-String -Pattern "^FAILED" | ForEach-Object { $_.Line.Trim() } | Select-Object -Unique | Select-Object -First 8 | ForEach-Object { Out-Ann "error" $_ }
+            # 2) diagnostic headers only (never `N |` snippet lines).
+            $log | Where-Object { $_ -notmatch '^\s*\d+\s*\|' } | Select-String -Pattern "\(\d+(,\d+)?\)\s*:\s*(fatal\s+)?error|:\d+:\d+:\s*(fatal\s+)?error|error\s+(C|LNK)\d+|fatal error|ninja:\s*error|LINK\s*:.*error" | ForEach-Object { $_.Line.Trim() } | Select-Object -Unique | Select-Object -First 12 | ForEach-Object { Out-Ann "error" $_ }
+            # 3) tail summary.
+            $log | Select-Object -Last 4 | ForEach-Object { Out-Ann "notice" "tail: $_" }
             Write-Output "::endgroup::"
             exit 1
           }
