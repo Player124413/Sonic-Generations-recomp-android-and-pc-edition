@@ -1,0 +1,35 @@
+# Sonic Generations (Windows) default settings.
+# Flat `key = value` pairs (nested [tables] are joined with '_').
+# Every line is optional -- delete what you don't want to override.
+# The game looks for this file next to the .exe.
+
+# --- Input: the keyboard plays out of the box (mnk driver) ------------------
+mnk_mode = true
+# mnk_mouse = true        # mouse-look on the right stick (uncomment to try)
+# mnk_sensitivity = 1.0
+
+# Default binds: WASD left stick, arrows right stick, Shift+arrows D-pad,
+# Space A, L X, P Y, Q/E triggers, 1/3 shoulders, F/K stick clicks,
+# Z/Tab back, X/Enter start. Rebind examples (comma = alternatives):
+# keybind_start = "Return"
+# keybind_guide = "Escape"
+# keybind_rstick_up = "I"
+
+# --- Display ----------------------------------------------------------------
+video_mode_width = 1280
+video_mode_height = 720
+resolution_scale = 1
+vsync = true
+present_letterbox = true
+
+# --- Performance (same bundle as the Android launcher) ----------------------
+readback_memexport = false
+async_shader_compilation = true
+anisotropic_override = 0
+occlusion_query_enable = false
+native_2x_msaa = false
+gamma_render_target_as_unorm16 = false
+log_level = "warning"
+
+# --- Speed hacks (uncomment to try; may misbehave) --------------------------
+# protect_zero = false   # skips address-0 protection; faster, can crash

@@ -1,5 +1,7 @@
-# Local SDK checkouts (fetched by ./android_sdk.sh, or by CI on every run)
+# Local SDK checkouts (fetched by ./android_sdk.sh / ./windows_sdk.sh,
+# or by CI on every run)
 /android/sdk/
+/windows/sdk/
 
 # CI signing key (generated per build, or restored from secrets)
 /android/ci-release.jks

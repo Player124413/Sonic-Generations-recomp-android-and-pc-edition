@@ -1,0 +1,86 @@
+name: Windows (Sonic Generations)
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  BUILD_TYPE: Release
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 360
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Ensure Clang 18+ and Ninja
+        run: |
+          $ok = $false
+          $clang = Get-Command clang -ErrorAction SilentlyContinue
+          if ($clang) {
+            $ver = (& clang --version) | Select-Object -First 1
+            Write-Host "found: $ver"
+            if ($ver -match 'clang version (\d+)\.') { $ok = [int]$Matches[1] -ge 18 }
+          }
+          if (-not $ok) {
+            Write-Host "installing LLVM via choco..."
+            choco install llvm -y --no-progress
+          }
+          # Make clang-cl visible to the later steps however LLVM got here.
+          "C:\Program Files\LLVM\bin" | Out-File -Append $env:GITHUB_PATH
+          $env:Path = "C:\Program Files\LLVM\bin;$env:Path"
+          Get-Command clang-cl -ErrorAction Stop | Out-Null
+          & clang-cl --version | Select-Object -First 2
+          if (-not (Get-Command ninja -ErrorAction SilentlyContinue)) {
+            choco install ninja -y --no-progress
+          }
+          ninja --version
+          cmake --version | Select-Object -First 1
+
+      - name: Fetch ReXGlue SDK + patches
+        shell: bash
+        # Default dest is windows/sdk under the repo root; the script is a
+        # no-op on re-runs (used as a cache-friendly stamp by CI).
+        run: bash windows_sdk.sh
+
+      - name: Configure (ClangCL + Ninja)
+        run: >
+          cmake -S windows -B build -G Ninja
+          -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl
+          -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Package
+        run: |
+          cmake --install build --prefix dist
+          Compress-Archive -Path dist/* -DestinationPath SonicGenerations-windows.zip
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SonicGenerations-windows
+          path: SonicGenerations-windows.zip
+          retention-days: 30
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: SonicGenerations-windows.zip
+          generate_release_notes: true
