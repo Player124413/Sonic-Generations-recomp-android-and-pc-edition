@@ -33,6 +33,16 @@ set(REXGLUE_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(REXGLUE_USE_VULKAN ON CACHE BOOL "" FORCE)
 set(REXGLUE_USE_D3D12 OFF CACHE BOOL "" FORCE)
 
+# Clang gates intrinsics on enabled target features strictly (unlike MSVC cl,
+# which accepts SSSE3 by default): SDK code uses _mm_shuffle_epi8, so the
+# Windows build needs the same SSE4.1 baseline the SDK itself applies on
+# non-MSVC toolchains (see rexglue_apply_target_settings). Must precede
+# add_subdirectory so every SDK target - and the recomp library below -
+# inherits it.
+if(CMAKE_CXX_COMPILER_ID MATCHES "^(Apple)?Clang$")
+    add_compile_options(-msse4.1)
+endif()
+
 add_subdirectory("${REXSDK_DIR}" rexglue-sdk)
 # REXGLUE_SHARE_DIR is published by the SDK for subdirectory consumers.
 include("${REXSDK_DIR}/cmake/rexglue_helpers.cmake")
