@@ -98,6 +98,7 @@ target_link_libraries(recomp PUBLIC rex::runtime rexui)
 # --- app library loaded by SDLActivity ----------------------------------------
 add_library(main SHARED
     android_gamepad.cpp
+    android_keyboard.cpp
     android_main.cpp
     "${REX_PORT_DIR}/src/main.cpp"
     "${REXSDK_DIR}/src/ui/rex_app.cpp"

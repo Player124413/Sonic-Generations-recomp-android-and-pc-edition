@@ -120,6 +120,7 @@ public class SetupActivity extends Activity {
         gfxBtn = button(root, R.string.graphics, v -> showGraphicsDialog());
         driverBtn = button(root, R.string.gpu_driver, v -> showDriverDialog());
         logsBtn = button(root, R.string.logs, v -> showLogsDialog());
+        button(root, R.string.keyboard, v -> showKeyboardDialog());
         resetBtn = button(root, R.string.reset, v -> reset());
 
         ScrollView sv = new ScrollView(this);
@@ -177,6 +178,22 @@ public class SetupActivity extends Activity {
                 .setNeutralButton(R.string.copy, (d, w) -> copyText(text))
                 .setNegativeButton(android.R.string.ok, null)
                 .setOnDismissListener(d -> { c.renameTo(new File(logsDir(), "crash.prev.txt")); })
+                .show();
+    }
+
+    private void showKeyboardDialog() {
+        android.widget.TextView tv = new android.widget.TextView(this);
+        tv.setText(getString(R.string.keyboard_map));
+        tv.setTypeface(android.graphics.Typeface.MONOSPACE);
+        tv.setTextSize(13);
+        int pad = (int) (16 * getResources().getDisplayMetrics().density);
+        tv.setPadding(pad, pad, pad, pad);
+        android.widget.ScrollView sv = new android.widget.ScrollView(this);
+        sv.addView(tv);
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.keyboard)
+                .setView(sv)
+                .setNegativeButton(android.R.string.ok, null)
                 .show();
     }
 

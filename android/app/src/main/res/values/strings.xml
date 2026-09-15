@@ -14,6 +14,8 @@
     <string name="pick_folder">Choose folder (extracted game or Games on Demand)</string>
     <string name="graphics">Graphics &amp; performance</string>
     <string name="logs">Logs &amp; crash report</string>
+    <string name="keyboard">Keyboard controls</string>
+    <string name="keyboard_map">USB / Bluetooth keyboards work out of the box — no setup. Layout:\n\nLeft stick … W A S D\nRight stick … I J K L\nD-Pad … Arrow keys\n\nA … Space        B … Left Shift\nX … F            Y … R\nLB / RB … Q / E\nLT / RT … C / V (full pull)\nL3 / R3 … Tab / Right Shift\n\nStart … Enter\nBack … Backspace\nGuide … Escape</string>
     <string name="crash_title">The game crashed last time</string>
     <string name="share">Share</string>
     <string name="copy">Copy</string>

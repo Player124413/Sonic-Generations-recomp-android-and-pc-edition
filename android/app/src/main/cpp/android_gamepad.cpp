@@ -117,6 +117,36 @@ bool EnsureVirtualPadAttached() {
   return AttachLocked();
 }
 
+bool VirtualSetButton(int button, bool down) {
+  std::lock_guard<std::mutex> guard(g_mutex);
+  if (!g_joystick || button < 0 || button >= kNumButtons) {
+    return false;
+  }
+  SDL_SetJoystickVirtualButton(g_joystick, button, down);
+  return true;
+}
+
+bool VirtualSetStick(int stick, float x, float y) {
+  std::lock_guard<std::mutex> guard(g_mutex);
+  if (!g_joystick || stick < 0 || stick > 1) {
+    return false;
+  }
+  const int base = (stick == 0) ? 0 : 2;
+  SDL_SetJoystickVirtualAxis(g_joystick, base + 0, StickRaw(x));
+  SDL_SetJoystickVirtualAxis(g_joystick, base + 1, StickRaw(y));
+  return true;
+}
+
+bool VirtualSetTrigger(int trigger, float value) {
+  std::lock_guard<std::mutex> guard(g_mutex);
+  if (!g_joystick || trigger < 0 || trigger > 1) {
+    return false;
+  }
+  const int axis = (trigger == 0) ? 4 : 5;
+  SDL_SetJoystickVirtualAxis(g_joystick, axis, TriggerRaw(value));
+  return true;
+}
+
 }  // namespace rexport::gamepad
 
 // ---------------------------------------------------------------------------
@@ -128,42 +158,26 @@ extern "C" {
 JNIEXPORT jboolean JNICALL
 Java_com_rexauto_port_gamepad_PadInputBridge_nativeSetButton(
     JNIEnv* /*env*/, jclass /*clazz*/, jint button, jboolean down) {
-  std::lock_guard<std::mutex> guard(rexport::gamepad::g_mutex);
-  if (!rexport::gamepad::g_joystick || button < 0 ||
-      button >= rexport::gamepad::kNumButtons) {
-    return JNI_FALSE;
-  }
-  SDL_SetJoystickVirtualButton(rexport::gamepad::g_joystick,
-                               static_cast<int>(button), down == JNI_TRUE);
-  return JNI_TRUE;
+  return rexport::gamepad::VirtualSetButton(static_cast<int>(button),
+                                            down == JNI_TRUE)
+             ? JNI_TRUE
+             : JNI_FALSE;
 }
 
 JNIEXPORT jboolean JNICALL
 Java_com_rexauto_port_gamepad_PadInputBridge_nativeSetStick(
     JNIEnv* /*env*/, jclass /*clazz*/, jint stick, jfloat x, jfloat y) {
-  std::lock_guard<std::mutex> guard(rexport::gamepad::g_mutex);
-  if (!rexport::gamepad::g_joystick || stick < 0 || stick > 1) {
-    return JNI_FALSE;
-  }
-  const int base = (stick == 0) ? 0 : 2;
-  SDL_SetJoystickVirtualAxis(rexport::gamepad::g_joystick, base + 0,
-                             rexport::gamepad::StickRaw(x));
-  SDL_SetJoystickVirtualAxis(rexport::gamepad::g_joystick, base + 1,
-                             rexport::gamepad::StickRaw(y));
-  return JNI_TRUE;
+  return rexport::gamepad::VirtualSetStick(static_cast<int>(stick), x, y)
+             ? JNI_TRUE
+             : JNI_FALSE;
 }
 
 JNIEXPORT jboolean JNICALL
 Java_com_rexauto_port_gamepad_PadInputBridge_nativeSetTrigger(
     JNIEnv* /*env*/, jclass /*clazz*/, jint trigger, jfloat value) {
-  std::lock_guard<std::mutex> guard(rexport::gamepad::g_mutex);
-  if (!rexport::gamepad::g_joystick || trigger < 0 || trigger > 1) {
-    return JNI_FALSE;
-  }
-  const int axis = (trigger == 0) ? 4 : 5;
-  SDL_SetJoystickVirtualAxis(rexport::gamepad::g_joystick, axis,
-                             rexport::gamepad::TriggerRaw(value));
-  return JNI_TRUE;
+  return rexport::gamepad::VirtualSetTrigger(static_cast<int>(trigger), value)
+             ? JNI_TRUE
+             : JNI_FALSE;
 }
 
 }  // extern "C"

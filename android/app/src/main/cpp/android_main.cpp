@@ -41,6 +41,7 @@
 #include <fmt/format.h>
 
 #include "android_gamepad.h"
+#include "android_keyboard.h"
 #if REX_HAVE_ADRENOTOOLS
 #include <adrenotools/driver.h>
 #endif
@@ -402,6 +403,7 @@ int RunAndroidApp() {
     std::unique_ptr<rex::ui::WindowedApp> app = creator(app_context);
     if (app->OnInitialize()) {
       rexport::gamepad::EnsureVirtualPadAttached();
+      rexport::keyboard::InstallMapper();
       result = app_context.RunMainMessageLoop();
     } else {
       REXLOG_ERROR("OnInitialize failed - see earlier errors");

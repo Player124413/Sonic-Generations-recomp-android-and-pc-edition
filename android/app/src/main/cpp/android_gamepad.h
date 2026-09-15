@@ -17,4 +17,15 @@ namespace rexport::gamepad {
  */
 bool EnsureVirtualPadAttached();
 
+/**
+ * Shared virtual-pad writers, used by the JNI touch overlay and the physical
+ * keyboard mapper alike. Thread-safe; no-ops (returning false) until the pad
+ * is attached or when an index is out of range.
+ */
+bool VirtualSetButton(int button, bool down);
+/** x/y in [-1, 1]; +y is DOWN (SDL gamepad convention). */
+bool VirtualSetStick(int stick, float x, float y);
+/** value in [0, 1]. */
+bool VirtualSetTrigger(int trigger, float value);
+
 }  // namespace rexport::gamepad

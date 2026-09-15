@@ -20,6 +20,9 @@ public class MainActivity extends SDLActivity {
     /** Present counter from the Vulkan presenter (librexruntime.so); -1 if unavailable. */
     private static native long nativeGetPresentCount();
 
+    /** Releases all keyboard-held inputs (stuck-key safety on pause). */
+    private static native void nativeKeyboardReset();
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         if (!GameFiles.hasValidGameRoot(this)) {
@@ -118,6 +121,10 @@ public class MainActivity extends SDLActivity {
     protected void onPause() {
         if (mGamepad != null) mGamepad.onHostPause();
         if (mFpsHandler != null) mFpsHandler.removeCallbacks(mFpsTick);
+        try {
+            nativeKeyboardReset();
+        } catch (Throwable ignored) {
+        }
         super.onPause();
     }
 
