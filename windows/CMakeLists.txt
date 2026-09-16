@@ -42,6 +42,12 @@ set(REXGLUE_USE_D3D12 OFF CACHE BOOL "" FORCE)
 if(CMAKE_CXX_COMPILER_ID MATCHES "^(Apple)?Clang$")
     add_compile_options(-msse4.1)
 endif()
+if(CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
+    # The SDK relies on -fno-char8_t semantics (u8"..." is const char[]),
+    # but clang-cl ignores the GNU spelling; use the MSVC spelling instead,
+    # otherwise xboxkrnl_ob.cpp etc. fail with char8_t -> string_view errors.
+    add_compile_options(/Zc:char8_t-)
+endif()
 
 add_subdirectory("${REXSDK_DIR}" rexglue-sdk)
 # REXGLUE_SHARE_DIR is published by the SDK for subdirectory consumers.
