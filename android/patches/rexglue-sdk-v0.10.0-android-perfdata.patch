@@ -1,0 +1,185 @@
+Step-0 perf telemetry for the Android port (see NATIVE_PLAN.md).
+
+Upstream ships a perf-counter registry (rex::perf::CounterId) but compiles it
+out of Release builds and only placed PROFILE_ callsites in the D3D12
+backend. This patch:
+
+1. Enables REXGLUE_ENABLE_PERF_COUNTERS unconditionally (relaxed atomics,
+   ~1 ns per hit; Tracy stays compiled out in Release).
+2. Mirrors the D3D12 PROFILE_ callsites into the Vulkan backend:
+   - draws + vertices at host draw record (primitive path only, like D3D12;
+     the 3-vertex resolve helper draw is not counted),
+   - pipeline cache hit/miss in EnsurePipelineCreated,
+   - texture object hit/miss in the shared FindOrCreateTexture (measures
+     upload churn; D3D12 builds would add descriptor-level hits on top of
+     this, but nothing builds D3D12 with counters),
+   - command-buffer stall on the blocking fence wait (not the zero-timeout
+     poll).
+   Freebies already wired upstream and now live in Release: frame time/FPS
+   (Flip), dispatcher + interrupt counts, XMA frames, audio queue depth.
+   Deliberately NOT wired (no cheap seam): APC depth (intrusive list walk),
+   thread create/exit (rare), audio latency, critical-region contention.
+3. Adds an Android perf-timeline tick to the Vulkan presenter: every present
+   accumulates the last flipped frame's snapshot; every 300 presents one
+   WARN-level PERFDATA line with averages goes to the shared log (WARN:
+   presets run warning+, so INFO would never be seen; ultra stays quiet).
+   Presents without an intervening guest-frame Flip re-add the same
+   snapshot; negligible at the steady-state 1:1 present/frame ratio.
+
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -28,7 +28,9 @@
+-# Propagate profiling defines globally (compiled out in Release)
++# Propagate profiling defines globally. Tracy stays compiled out in Release,
++# but the lightweight perf counters are always on (relaxed atomics, ~1 ns
++# each): the Android port reads them for its perf timeline (vulkan_presenter).
+ if(REXGLUE_ENABLE_TRACY)
+     add_compile_definitions($<$<NOT:$<CONFIG:Release>>:REXGLUE_ENABLE_PROFILING>)
+ endif()
+ if(REXGLUE_ENABLE_PERF_COUNTERS)
+-    add_compile_definitions($<$<NOT:$<CONFIG:Release>>:REXGLUE_ENABLE_PERF_COUNTERS>)
++    add_compile_definitions(REXGLUE_ENABLE_PERF_COUNTERS)
+ endif()
+--- a/src/core/CMakeLists.txt
++++ b/src/core/CMakeLists.txt
+@@ -146,5 +146,5 @@
+ if(REXGLUE_ENABLE_PERF_COUNTERS)
+     target_sources(rexcore PRIVATE perf/counter.cpp)
+     target_compile_definitions(rexcore PUBLIC
+-        $<$<NOT:$<CONFIG:Release>>:REXGLUE_ENABLE_PERF_COUNTERS>)
++        REXGLUE_ENABLE_PERF_COUNTERS)
+ endif()
+--- a/src/graphics/vulkan/command_processor.cpp
++++ b/src/graphics/vulkan/command_processor.cpp
+@@ -30,3 +30,4 @@
+ #include <rex/logging.h>
+ #include <rex/math.h>
++#include <rex/perf/counter.h>
+ #include <rex/graphics/util/draw.h>
+@@ -4136,5 +4136,7 @@
+   // Draw.
+   if (primitive_processing_result.index_buffer_type ==
+           PrimitiveProcessor::ProcessedIndexBufferType::kNone ||
+       shader_32bit_index_dma) {
++    PROFILE_DRAW_CALL();
++    PROFILE_VERTICES(primitive_processing_result.host_draw_vertex_count);
+     deferred_command_buffer_.CmdVkDraw(primitive_processing_result.host_draw_vertex_count, 1, 0, 0);
+@@ -4166,7 +4168,9 @@
+     deferred_command_buffer_.CmdVkBindIndexBuffer(
+         index_buffer.first, index_buffer.second,
+         primitive_processing_result.host_index_format == xenos::IndexFormat::kInt16
+             ? VK_INDEX_TYPE_UINT16
+             : VK_INDEX_TYPE_UINT32);
++    PROFILE_DRAW_CALL();
++    PROFILE_VERTICES(primitive_processing_result.host_draw_vertex_count);
+     deferred_command_buffer_.CmdVkDrawIndexed(primitive_processing_result.host_draw_vertex_count, 1,
+                                               0, 0, 0);
+@@ -4990,3 +4994,4 @@
+     // order."
++    PROFILE_CMD_BUFFER_STALL();
+     VkResult wait_result =
+         dfn.vkWaitForFences(device, uint32_t(await_submission - submission_completed_),
+--- a/src/graphics/vulkan/pipeline_cache.cpp
++++ b/src/graphics/vulkan/pipeline_cache.cpp
+@@ -30,3 +30,4 @@
+ #include <rex/logging.h>
+ #include <rex/math.h>
++#include <rex/perf/counter.h>
+ #include <rex/thread.h>
+@@ -3016,7 +3017,9 @@
+   if (existing_pipeline != VK_NULL_HANDLE) {
+     if (!is_placeholder || creating_placeholder) {
++      PROFILE_PIPELINE_CACHE_HIT();
+       return true;
+     }
+   }
++  PROFILE_PIPELINE_CACHE_MISS();
+ 
+   // This function preferably should validate the description to prevent
+--- a/src/graphics/pipeline/texture/cache.cpp
++++ b/src/graphics/pipeline/texture/cache.cpp
+@@ -24,3 +24,4 @@
+ #include <rex/graphics/register_file.h>
+ #include <rex/graphics/xenos.h>
++#include <rex/perf/counter.h>
+ #include <rex/logging.h>
+@@ -948,6 +949,8 @@
+   auto found_texture_it = textures_.find(key);
+   if (found_texture_it != textures_.end()) {
++    PROFILE_TEXTURE_CACHE_HIT();
+     return found_texture_it->second.get();
+   }
++  PROFILE_TEXTURE_CACHE_MISS();
+ 
+   // Create the texture and add it to the map.
+--- a/src/ui/vulkan/vulkan_presenter.cpp
++++ b/src/ui/vulkan/vulkan_presenter.cpp
+@@ -24,3 +24,4 @@
+ #include <rex/logging.h>
+ #include <rex/math.h>
++#include <rex/perf/counter.h>
+ #include <rex/platform.h>
+@@ -67,4 +68,49 @@
+ extern "C" __attribute__((visibility("default"))) uint64_t RexAndroid_GetPresentCount() {
+   return g_android_present_count.load(std::memory_order_relaxed);
+ }
++
++// Step-0 perf timeline (see NATIVE_PLAN.md): accumulates the last flipped
++// frame's perf snapshot on every present, logs averages every 300 presents
++// (same cadence as the FPS meter). WARN level: presets run warning+, so INFO
++// would never reach the shared log; ultra (error-only) stays quiet.
++// Presents without an intervening guest-frame Flip re-add the same snapshot;
++// negligible at the steady-state 1:1 present/frame ratio.
++struct AndroidPerfTotals {
++  int64_t frame_us = 0;
++  int64_t draws = 0;
++  int64_t verts = 0;
++  int64_t tex_hit = 0;
++  int64_t tex_miss = 0;
++  int64_t pipe_hit = 0;
++  int64_t pipe_miss = 0;
++  int64_t dispatched = 0;
++  int64_t interrupts = 0;
++  int64_t xma = 0;
++  int64_t stalls = 0;
++};
++static AndroidPerfTotals g_android_perf_totals;
++static void AndroidPerfTimelineTick() {
++  using rex::perf::CounterId;
++  using rex::perf::GetSnapshotCounter;
++  g_android_perf_totals.frame_us += GetSnapshotCounter(CounterId::kFrameTimeUs);
++  g_android_perf_totals.draws += GetSnapshotCounter(CounterId::kDrawCalls);
++  g_android_perf_totals.verts += GetSnapshotCounter(CounterId::kVerticesProcessed);
++  g_android_perf_totals.tex_hit += GetSnapshotCounter(CounterId::kTextureCacheHits);
++  g_android_perf_totals.tex_miss += GetSnapshotCounter(CounterId::kTextureCacheMisses);
++  g_android_perf_totals.pipe_hit += GetSnapshotCounter(CounterId::kPipelineCacheHits);
++  g_android_perf_totals.pipe_miss += GetSnapshotCounter(CounterId::kPipelineCacheMisses);
++  g_android_perf_totals.dispatched += GetSnapshotCounter(CounterId::kFunctionsDispatched);
++  g_android_perf_totals.interrupts += GetSnapshotCounter(CounterId::kInterruptDispatches);
++  g_android_perf_totals.xma += GetSnapshotCounter(CounterId::kXmaFramesDecoded);
++  g_android_perf_totals.stalls += GetSnapshotCounter(CounterId::kCommandBufferStalls);
++  uint64_t presents = g_android_present_count.load(std::memory_order_relaxed);
++  if ((presents % 300) == 0) {
++    const AndroidPerfTotals& t = g_android_perf_totals;
++    REXLOG_WARN(
++        "PERFDATA presents={} frame_us={} draws={} verts={} tex={}/{} pipe={}/{} disp={} irq={} xma={} stall={}",
++        presents, t.frame_us / 300, t.draws / 300, t.verts / 300, t.tex_hit, t.tex_miss,
++        t.pipe_hit, t.pipe_miss, t.dispatched, t.interrupts, t.xma, t.stalls);
++    g_android_perf_totals = AndroidPerfTotals{};
++  }
++}
+ #endif
+@@ -2256,5 +2302,6 @@
+   switch (present_result) {
+     case VK_SUCCESS:
+ #if REX_PLATFORM_ANDROID
+       g_android_present_count.fetch_add(1, std::memory_order_relaxed);
++      AndroidPerfTimelineTick();
+       if ((g_android_present_count.load(std::memory_order_relaxed) % 300) == 0) {
+@@ -2265,5 +2312,6 @@
+       return PaintResult::kPresented;
+     case VK_SUBOPTIMAL_KHR:
+ #if REX_PLATFORM_ANDROID
+       g_android_present_count.fetch_add(1, std::memory_order_relaxed);
++      AndroidPerfTimelineTick();
+       if ((g_android_present_count.load(std::memory_order_relaxed) % 300) == 0) {
