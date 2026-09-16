@@ -1,0 +1,71 @@
+Android shader/pipeline persistence durability + observability.
+
+Stock policy: the storage writer thread fwrites new shaders/pipelines but
+fflushes only on clean shutdown (storage_write_flush_* is set solely by the
+shutdown path). Android practically never shuts down cleanly (kill-happy
+lifecycle), so a killed session can lose its whole warmup in the stdio
+buffer and the next launch recompiles everything: placeholder-discard draws
++ skipped presents all over again (the intermittent-glitch signature).
+
+This patch flushes both storage streams every 64 newly stored entries from
+the writer thread (which owns both FILE*), and adds WARN-level one-liners
+so the shared log shows the cache actually working:
+  SHADERCACHE load: N pipelines preloaded (M skipped)
+  SHADERCACHE stored: N shaders + M pipelines flushed to disk
+No format/behavior change: same files, same append protocol, shaders keep
+their ucode_storage_index dedup and pipelines their load-then-hit flow.
+
+--- a/src/graphics/vulkan/pipeline_cache.cpp
++++ b/src/graphics/vulkan/pipeline_cache.cpp
+@@ -492,10 +492,12 @@
+       pipeline_stored_descriptions.resize(pipeline_storage_kept_count);
+       if (pipeline_storage_skipped_unsupported_count || pipeline_storage_skipped_corrupted_count) {
+         REXGPU_INFO(
+             "VulkanPipelineCache: Pipeline storage filtering kept {} descriptions (skipped {} "
+             "unsupported, {} corrupted)",
+             pipeline_storage_kept_count, pipeline_storage_skipped_unsupported_count,
+             pipeline_storage_skipped_corrupted_count);
+       }
++      REXGPU_WARN("SHADERCACHE load: {} pipelines preloaded ({} skipped)", pipeline_storage_kept_count,
++                  pipeline_storage_skipped_unsupported_count + pipeline_storage_skipped_corrupted_count);
+     }
+   }
+@@ -3636,4 +3638,12 @@
+   bool flush_shaders = false;
+   bool flush_pipelines = false;
++
++  // Android durability: flush the storage streams every 64 newly stored
++  // entries. The stock policy flushes only on clean shutdown, which Android
++  // practically never reaches (kill-happy lifecycle) - without this every
++  // session's warmup can be lost and the next launch recompiles everything.
++  uint64_t stored_shader_count = 0;
++  uint64_t stored_pipeline_count = 0;
++  uint32_t stored_since_flush = 0;
+ 
+   while (true) {
+@@ -3693,4 +3703,6 @@
+         fwrite(ucode_guest_endian.data(), shader_header.ucode_dword_count * sizeof(uint32_t), 1,
+                shader_storage_file_);
+       }
++      ++stored_shader_count;
++      ++stored_since_flush;
+     }
+@@ -3698,5 +3710,18 @@
+     if (write_pipeline) {
+       assert_not_null(pipeline_storage_file_);
+       fwrite(&pipeline_description, sizeof(pipeline_description), 1, pipeline_storage_file_);
++      ++stored_pipeline_count;
++      ++stored_since_flush;
++    }
++    if (stored_since_flush >= 64) {
++      stored_since_flush = 0;
++      if (shader_storage_file_) {
++        fflush(shader_storage_file_);
++      }
++      if (pipeline_storage_file_) {
++        fflush(pipeline_storage_file_);
++      }
++      REXGPU_WARN("SHADERCACHE stored: {} shaders + {} pipelines flushed to disk", stored_shader_count,
++                  stored_pipeline_count);
+     }
+   }
